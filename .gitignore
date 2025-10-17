@@ -167,6 +167,6 @@ cython_debug/
 measurements/
 
 #no need to save the tests but keep the folder
-PipeLineTestResults/*
+PipeLineTestResults/*.png
 !PipeLineTestResults/.gitkeep
 
