@@ -163,12 +163,10 @@ cython_debug/
 
 #hide the AI models from github
 
-#no need for calibration fules
-calibration/
-
 #no need to save the measurements
 measurements/
 
-#no need to save the tests
+#no need to save the tests but keep the folder
 PipeLineTestResults/*
 !PipeLineTestResults/.gitkeep
+
