@@ -1,1 +1,1 @@
-# PromAPP_Snellius_NeuroSurgeryARDemo
+# AR_EEG_Griddetection
