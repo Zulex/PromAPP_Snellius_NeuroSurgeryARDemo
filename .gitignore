@@ -168,3 +168,7 @@ calibration/
 
 #no need to save the measurements
 measurements/
+
+#no need to save the tests
+PipeLineTestResults/
+
