@@ -44,9 +44,10 @@ buffer_size = 10
 
 #AI model parameters
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
-modelpathBounding = "models/bestCropping.engine"
+modelpathBounding = "models/bestCropping_New_Small.pt"
 modelBounding = YOLO(modelpathBounding, task='detect')
 
+#modelpathSuper = "models/Chain.onnx"
 modelpathSuper = "models/Super_90kImages_800000.onnx"
 modelSuper = ort.InferenceSession(modelpathSuper)
 modelNameSuper = modelSuper.get_inputs()[0].name
