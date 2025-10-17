@@ -1,4 +1,3 @@
-from pynput import keyboard
 import multiprocessing as mp
 import numpy as np
 import cv2

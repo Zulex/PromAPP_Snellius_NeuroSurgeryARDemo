@@ -8,7 +8,6 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pynput import keyboard
 import multiprocessing as mp
 import numpy as np
 import cv2
