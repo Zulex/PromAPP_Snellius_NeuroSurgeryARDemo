@@ -170,5 +170,5 @@ calibration/
 measurements/
 
 #no need to save the tests
-PipeLineTestResults/
-
+PipeLineTestResults/*
+!PipeLineTestResults/.gitkeep

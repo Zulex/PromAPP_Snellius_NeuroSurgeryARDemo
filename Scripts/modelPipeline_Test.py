@@ -178,7 +178,12 @@ if (__name__ == '__main__'):
         bothImages = np.vstack((leftImages, rightImages))
 
 # Create a window and set it to be resizable
-cv2.namedWindow('allImages', cv2.WINDOW_NORMAL)
-cv2.imshow('allImages', bothImages)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+#cv2.namedWindow('allImages', cv2.WINDOW_NORMAL)
+#cv2.imshow('allImages', bothImages)
+#cv2.waitKey(0)
+#cv2.destroyAllWindows()
+
+# Save final composite image to PNG
+output_path = 'PipeLineTestResults/allImages.png'
+cv2.imwrite(output_path, bothImages)
+print(f"Saved image to {output_path}")
