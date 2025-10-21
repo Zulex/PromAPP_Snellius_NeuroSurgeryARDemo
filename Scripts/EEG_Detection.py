@@ -29,6 +29,24 @@ import unityserver
 import threading
 import csv
 
+import platform
+if platform.system() == "Windows":
+    print("Using windows libraries")
+    import msvcrt
+    def get_key():
+        return msvcrt.getch()
+else:
+    print("Using non windows libraries")
+    import termios, tty
+    def get_key():
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch
 
 
 print("Starting script")
@@ -85,22 +103,21 @@ def ShowImage(image_l, image_r, pts_left, pts_right, distance):
 
 def on_press(key):
     global enable
-    enable = key != keyboard.Key.esc
+    #enable = key != keyboard.Key.esc
     return enable
 
 server = None  # Global variable to store the server instance
 def run_server():
-    global server  # Declare that we are modifying the global server variable
-    server_host = "192.168.1.97"
-    server_port = 5000
-    server = unityserver.PeerToPeerServer(server_host, server_port)
-
+    global server
+    server = unityserver.PeerToPeerServer("192.168.1.55", 5000)
     try:
         server.start()
     except KeyboardInterrupt:
         logging.info("Server stopped by user.")
     finally:
+        print("Stopping TCP server for DINO locations")
         server.stop()
+
 
 # Create a function to handle file name checking and modification
 def get_unique_filename(folder, filename):
@@ -116,11 +133,25 @@ def get_unique_filename(folder, filename):
     return new_filename
 
 #------------------------------------------------------------------------------
+# Thread to wait for Esc key
+stop_event = threading.Event()
+def esc_listener():
+    while not stop_event.is_set():
+        key = get_key()
+        if platform.system() == "Windows":
+            if key == b'\x1b':  # Esc
+                stop_event.set()
+        else:
+            if key == '\x1b':  # Esc
+                stop_event.set()
+
+
+#------------------------------------------------------------------------------
 
 if (__name__ == '__main__'):
-    enable = True
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
+    
+    listener_thread = threading.Thread(target=esc_listener, daemon=True)
+    listener_thread.start()
 
     # Get calibration matrixes -------------------------------------------------
     calibration_lf = hl2ss_3dcv.get_calibration_rm(host, port_left, calibration_path)
@@ -181,7 +212,8 @@ if (__name__ == '__main__'):
     index = 0
     data_batch = []
 
-    while (enable):
+    print("Starting while loop")
+    while not stop_event.is_set():
         # Get frames ----------------------------------------------------------
         sink_left.acquire()
         _, data_left = sink_left.get_most_recent_frame()
@@ -258,25 +290,30 @@ if (__name__ == '__main__'):
             print("Couldn't perform pose detection given the found keyposes")
             continue
 
-        
+        print(1)
 
         #We only access NDI Tool position when also the EEG has been found to ensure same amount of frames
         if server:  # Ensure the server has been created and is running
+            print("1,1")
             current_position = server.get_current_position()  # Thread-safe access to currentPosition
+            print("1,2")
             DinoPosAndRot, processed = cf.process_string(current_position)
+            print("1,3")
             if(not processed):
+                print("1,4")
                 continue
         else:
+            print("1,5")
             print("ERROR: Could not retrieve location and rotation from the NDI tools measured by the hololens.")
 
-        
+        print("1,6")
         points_3d[2, :] *= -1 #To left handed unity coordinates by flipping z ax
         circle1 = points_3d[:, 4]  
         circle8 = points_3d[:, 11]
         circle57 = points_3d[:, 60]
         circle64 = points_3d[:, 67]
 
-
+        print(2)
         EEGpositions = []
         for i in range(64):
             data_x = points_3d[:, 4 + i][0]  # Data1x to Data67x
@@ -301,7 +338,7 @@ if (__name__ == '__main__'):
             filtered_position = KalmanFilter.dynamic_adjustment(kalman_filters[i], previous_positions[i], points_3d[:, i])
             previous_positions[i] = filtered_position  # Update previous position
 
-
+        print(3)
         # Apply Kalman filter to smooth the 3D points
         filtered_circle1 = previous_positions[4]
         filtered_circle8 = previous_positions[11]
@@ -334,7 +371,7 @@ if (__name__ == '__main__'):
         differenceSize = abs(leftImages.shape[1] - rightImages.shape[1])
 
         
-
+        print(4)
         if(cf.is_divisible_by_2(differenceSize)):
             if(leftImages.shape[1] > rightImages.shape[1]):
                 padding = int(differenceSize / 2)
@@ -374,9 +411,16 @@ if (__name__ == '__main__'):
         display_list.end_display_list()
         ipc.push(display_list)
         results = ipc.pull(display_list)
-
+        print(5)
         cv2.imshow('allImages', bothImages)
         cv2.waitKey(1)
+
+    # Wait for Esc key or CTRL+C
+    try:
+        stop_event.wait()
+    except KeyboardInterrupt:
+        pass
+
 
 
     # Stop streams ------------------------------------------------------------
@@ -390,5 +434,5 @@ if (__name__ == '__main__'):
     results = ipc.pull(command_buffer)
     ipc.close()
 
-    #stop keyboard events
-    listener.join()
+    listener_thread.join()
+    print("Script terminated cleanly.")
