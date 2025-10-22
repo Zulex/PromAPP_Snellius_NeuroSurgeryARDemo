@@ -23,11 +23,9 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pynput import keyboard
 import multiprocessing as mp
 import numpy as np
 import cv2
-from hl2ss.viewer import hl2ss
 from hl2ss.viewer import hl2ss
 from hl2ss.viewer import hl2ss_lnm
 from hl2ss.viewer import hl2ss_mp
@@ -48,7 +46,7 @@ print("Starting script")
 # Settings --------------------------------------------------------------------
 
 # HoloLens settings
-host = '192.168.1.55' #fill in your hololens IP address here
+host = '87.210.240.96' #fill in your hololens IP address here
 port_left  = hl2ss.StreamPort.RM_VLC_LEFTFRONT
 port_right = hl2ss.StreamPort.RM_VLC_RIGHTFRONT
 calibration_path = 'calibration'
@@ -93,12 +91,12 @@ def ShowImage(image_l, image_r, pts_left, pts_right, distance):
 
 def on_press(key):
     global enable
-    enable = key != keyboard.Key.esc
+    #enable = key != keyboard.Key.esc
     return enable
 
 def run_server():
     global server
-    server = unityserver.PeerToPeerServer("192.168.137.84", 5000)
+    server = unityserver.PeerToPeerServer("87.210.240.96", 5000)
     try:
         server.start()
     except KeyboardInterrupt:
@@ -139,8 +137,9 @@ def list_active_threads():
 
 if (__name__ == '__main__'):
     enable = True
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
+    #listener = keyboard.Listener(on_press=on_press)
+    #listener.start()
+
 
     calibration_lf = hl2ss_3dcv.get_calibration_rm(host, port_left, calibration_path)
     calibration_rf = hl2ss_3dcv.get_calibration_rm(host, port_right, calibration_path)
@@ -200,190 +199,198 @@ if (__name__ == '__main__'):
     index = 0
     data_batch = []
 
-    while (enable):
-        # Get frames ----------------------------------------------------------
-        sink_left.acquire()
-        _, data_left = sink_left.get_most_recent_frame()
-        if (data_left is None):
-            continue
+    try:
+        while (enable):
+            # Get frames ----------------------------------------------------------
+            sink_left.acquire()
+            _, data_left = sink_left.get_most_recent_frame()
+            if (data_left is None):
+                continue
 
-        _, data_right = sink_right.get_nearest(data_left.timestamp)
-        if (data_right is None):
-            continue
-        
-        try:
-            P1 = hl2ss_3dcv.rignode_to_camera(Rt1) @ hl2ss_3dcv.camera_to_image(K1)
-            P2 = hl2ss_3dcv.rignode_to_camera(Rt2) @ hl2ss_3dcv.camera_to_image(K2)
-        except:
-            print("ERROR: Hololens cannot find its own world position -> not saving results")
-            continue
+            _, data_right = sink_right.get_nearest(data_left.timestamp)
+            if (data_right is None):
+                continue
+            
+            try:
+                P1 = hl2ss_3dcv.rignode_to_camera(Rt1) @ hl2ss_3dcv.camera_to_image(K1)
+                P2 = hl2ss_3dcv.rignode_to_camera(Rt2) @ hl2ss_3dcv.camera_to_image(K2)
+            except:
+                print("ERROR: Hololens cannot find its own world position -> not saving results")
+                continue
 
-        # Using undistorted, rotated, unrectified images --------------------------
-        lf_u = cv2.remap(data_left.payload,  calibration_lf.undistort_map[:, :, 0], calibration_lf.undistort_map[:, :, 1], cv2.INTER_LINEAR)
-        rf_u = cv2.remap(data_right.payload, calibration_rf.undistort_map[:, :, 0], calibration_rf.undistort_map[:, :, 1], cv2.INTER_LINEAR)
-        lf_ru = hl2ss_3dcv.rm_vlc_rotate_image(lf_u, rotation_lf)
-        rf_ru = hl2ss_3dcv.rm_vlc_rotate_image(rf_u, rotation_rf)
-        image_l = hl2ss_3dcv.rm_vlc_to_rgb(lf_ru)
-        image_r = hl2ss_3dcv.rm_vlc_to_rgb(rf_ru)
- 
-        try:
-            #search for bounding box and crop the image
-            x_l, y_l, width_l, height_l = cf.BoundingBox(image_l, modelBounding)
-            imageCroppedL = cf.CropImage(image_l, x_l, y_l, width_l, height_l)
+            # Using undistorted, rotated, unrectified images --------------------------
+            lf_u = cv2.remap(data_left.payload,  calibration_lf.undistort_map[:, :, 0], calibration_lf.undistort_map[:, :, 1], cv2.INTER_LINEAR)
+            rf_u = cv2.remap(data_right.payload, calibration_rf.undistort_map[:, :, 0], calibration_rf.undistort_map[:, :, 1], cv2.INTER_LINEAR)
+            lf_ru = hl2ss_3dcv.rm_vlc_rotate_image(lf_u, rotation_lf)
+            rf_ru = hl2ss_3dcv.rm_vlc_rotate_image(rf_u, rotation_rf)
+            image_l = hl2ss_3dcv.rm_vlc_to_rgb(lf_ru)
+            image_r = hl2ss_3dcv.rm_vlc_to_rgb(rf_ru)
+    
+            try:
+                #search for bounding box and crop the image
+                x_l, y_l, width_l, height_l = cf.BoundingBox(image_l, modelBounding)
+                imageCroppedL = cf.CropImage(image_l, x_l, y_l, width_l, height_l)
 
-            x_r, y_r, width_r, height_r = cf.BoundingBox(image_r, modelBounding)
-            imageCroppedR = cf.CropImage(image_r, x_r, y_r, width_r, height_r)
-        except:
-            bothImages = np.hstack((image_l, image_r))
-            cv2.imshow('allImages', bothImages)
-            cv2.waitKey(1)
-            continue
+                x_r, y_r, width_r, height_r = cf.BoundingBox(image_r, modelBounding)
+                imageCroppedR = cf.CropImage(image_r, x_r, y_r, width_r, height_r)
+            except:
+                bothImages = np.hstack((image_l, image_r))
+                #cv2.imshow('allImages', bothImages)
+                #cv2.waitKey(1)
+                continue
+            
+            imageSuperL = imageCroppedL.copy()
+            imageSuperR = imageCroppedR.copy()
 
-        imageSuperL = imageCroppedL.copy()
-        imageSuperR = imageCroppedR.copy()
+            #perform super resolution
+            try:
+                imageSuperL = cf.SuperResolution(imageSuperL, modelSuper, modelNameSuper)
+                imageSuperR = cf.SuperResolution(imageSuperR, modelSuper, modelNameSuper)
+            except:
+                print("ERROR: there is an error in superresolution function -> Not saving results")
+                continue
 
-        #perform super resolution
-        try:
-            imageSuperL = cf.SuperResolution(imageSuperL, modelSuper, modelNameSuper)
-            imageSuperR = cf.SuperResolution(imageSuperR, modelSuper, modelNameSuper)
-        except:
-            print("ERROR: there is an error in superresolution function -> Not saving results")
-            continue
+            imagePoseL = imageSuperL.copy()
+            imagePoseR = imageSuperR.copy()
+            keypointsL = cf.KeypointDetection(imagePoseL, modelPose)
+            keypointsR = cf.KeypointDetection(imagePoseR, modelPose)
 
-        imagePoseL = imageSuperL.copy()
-        imagePoseR = imageSuperR.copy()
-        keypointsL = cf.KeypointDetection(imagePoseL, modelPose)
-        keypointsR = cf.KeypointDetection(imagePoseR, modelPose)
+            keypointsLFullL = cf.PointInCropToFull((x_l, y_l), (width_l, height_l), (image_l.shape[1], (image_l.shape[0])), keypointsL, normalized=False)
+            keypointsLFullR = cf.PointInCropToFull((x_r, y_r), (width_r, height_r), (image_r.shape[1], (image_r.shape[0])), keypointsR, normalized=False)
 
-        keypointsLFullL = cf.PointInCropToFull((x_l, y_l), (width_l, height_l), (image_l.shape[1], (image_l.shape[0])), keypointsL, normalized=False)
-        keypointsLFullR = cf.PointInCropToFull((x_r, y_r), (width_r, height_r), (image_r.shape[1], (image_r.shape[0])), keypointsR, normalized=False)
+            try:
+                points_3d = cf.KeyPointsTo3D(P1, P2, keypointsLFullL.T, keypointsLFullR.T)
+            except:
+                print("Couldn't perform pose detection given the found keyposes")
+                continue
 
-        try:
-            points_3d = cf.KeyPointsTo3D(P1, P2, keypointsLFullL.T, keypointsLFullR.T)
-        except:
-            print("Couldn't perform pose detection given the found keyposes")
-            continue
+            """  
+            try:
+                #We only access NDI Tool position when also the EEG has been found to ensure same amount of frames
+                if server:  # Ensure the server has been created and is running
+                    current_position = server.get_current_position()  # Thread-safe access to currentPosition
+                    DinoPosAndRot, processed = cf.process_string(current_position)
+                    if(not processed):
+                        continue
+                else:
+                    print("ERROR: Could not retrieve location and rotation from the NDI tools measured by the hololens.")
+            except: 
+                print("ERROR: not able to communicate with TCP server for DINO pose")
 
-        """  
-        try:
-            #We only access NDI Tool position when also the EEG has been found to ensure same amount of frames
-            if server:  # Ensure the server has been created and is running
-                current_position = server.get_current_position()  # Thread-safe access to currentPosition
-                DinoPosAndRot, processed = cf.process_string(current_position)
-                if(not processed):
-                    continue
+            if (warmup and warmupCounter < warmupAmount):
+                warmupCounter = warmupCounter + 1
+                continue
+            """
+
+
+            points_3d[2, :] *= -1 #To left handed unity coordinates by flipping z ax
+            circle1 = points_3d[:, 4]  
+            circle8 = points_3d[:, 11]
+            circle57 = points_3d[:, 60]
+            circle64 = points_3d[:, 67]
+
+            EEGpositions = []
+            for i in range(68):
+                data_x = points_3d[:, i][0]  # Data1x to Data67x
+                data_y = points_3d[:, i][1]  # Data1x to Data67x
+                data_z = points_3d[:, i][2]  # Data1x to Data67x
+
+                EEGpositions.extend([data_x, data_y, data_z])
+
+            index = index + 1
+            timestamp = cf.get_timestamp()
+            """
+            allData = [index, timestamp] + list(DinoPosAndRot) + EEGpositions
+            data_batch.append(allData)
+
+
+            # Check if batch is full, then save it to CSV
+            if len(data_batch) >= batch_size:
+                print(f"Saving batch of {batch_size} rows to CSV...")
+                cf.save_batch_to_csv(full_path, np.array(data_batch))
+                data_batch = []  # Clear the batch after saving
+            """
+            
+            cropLFilename = os.path.join(folderName, f"cropL_{index}.png")
+            cropRFilename = os.path.join(folderName, f"cropR_{index}.png")
+            superLFilename = os.path.join(folderName, f"superL_{index}.png")
+            superRFilename = os.path.join(folderName, f"superR_{index}.png")
+            keypointLFilename = os.path.join(folderName, f"keypointL_{index}.npy")
+            keypointRFilename = os.path.join(folderName, f"keypointR_{index}.npy")
+            #cv2.imwrite(cropLFilename, imageCroppedL)
+            #cv2.imwrite(cropRFilename, imageCroppedR)
+            #cv2.imwrite(superLFilename, imageSuperL)
+            #cv2.imwrite(superRFilename, imageSuperR)
+            #np.save(keypointLFilename, keypointsL)
+            #np.save(keypointRFilename, keypointsR)
+            
+            # Apply dynamic Kalman filter adjustment
+            for i in range(points_3d.shape[1]):
+                filtered_position = KalmanFilter.dynamic_adjustment(kalman_filters[i], previous_positions[i], points_3d[:, i])
+                previous_positions[i] = filtered_position  # Update previous position
+
+            # Apply Kalman filter to smooth the 3D points
+            filtered_circle1 = previous_positions[4]
+            filtered_circle8 = previous_positions[11]
+            filtered_circle57 = previous_positions[60]
+            filtered_circle64 = previous_positions[67]
+            
+            #for plotting
+            image_l = cf.resize_image(image_l, target_size=320)
+            imageCroppedL = cf.resize_image(imageCroppedL, target_size=320)
+            imageSuperL = cf.resize_image(imageSuperL, target_size=320)
+            imagePoseL = cf.resize_image(imagePoseL, target_size=320)
+            imagePoseL = cf.ShowPoseOnImage(imagePoseL, keypointsL)
+            imageCroppedAndPoseL = cf.ShowPoseOnImage(imageCroppedL, keypointsL)
+            leftImages = np.hstack((image_l, imageCroppedAndPoseL, imagePoseL))
+
+            image_r = cf.resize_image(image_r, target_size=320)
+            imageCroppedR = cf.resize_image(imageCroppedR, target_size=320)
+            imageSuperR = cf.resize_image(imageSuperR, target_size=320)
+            imagePoseR = cf.resize_image(imagePoseR, target_size=320)
+            imagePoseR = cf.ShowPoseOnImage(imagePoseR, keypointsR)
+            imageCroppedAndPoseR = cf.ShowPoseOnImage(imageCroppedR, keypointsR)
+            rightImages = np.hstack((image_r, imageCroppedAndPoseR, imagePoseR))
+
+            differenceSize = abs(leftImages.shape[1] - rightImages.shape[1])
+
+            if(cf.is_divisible_by_2(differenceSize)):
+                if(leftImages.shape[1] > rightImages.shape[1]):
+                    padding = int(differenceSize / 2)
+                    imageCroppedAndPoseR = cf.pad_image(imageCroppedAndPoseR, imageCroppedAndPoseR.shape[0], imageCroppedAndPoseR.shape[1] + padding)
+                    imagePoseR = cf.pad_image(imagePoseR, imagePoseR.shape[0], imagePoseR.shape[1] + padding)
+                    rightImages = np.hstack((image_r, imageCroppedAndPoseR, imagePoseR))
+                else:
+                    padding = int(differenceSize / 2)
+                    imageCroppedAndPoseL = cf.pad_image(imageCroppedAndPoseL, imageCroppedAndPoseL.shape[0], imageCroppedAndPoseL.shape[1] + padding)
+                    imagePoseL = cf.pad_image(imagePoseL, imagePoseL.shape[0], imagePoseL.shape[1] + padding)   
+                    leftImages = np.hstack((image_l, imageCroppedAndPoseL, imagePoseL))
+
             else:
-                print("ERROR: Could not retrieve location and rotation from the NDI tools measured by the hololens.")
-        except: 
-            print("ERROR: not able to communicate with TCP server for DINO pose")
+                if(leftImages.shape[1] > rightImages.shape[1]):
+                    paddingA = math.floor(differenceSize / 2)
+                    paddingB = math.ceil(differenceSize/2) 
+                    imageCroppedAndPoseR = cf.pad_image(imageCroppedAndPoseR, imageCroppedAndPoseR.shape[0], imageCroppedAndPoseR.shape[1] + paddingA)
+                    imagePoseR = cf.pad_image(imagePoseR, imagePoseR.shape[0], imagePoseR.shape[1] + paddingB)
+                    rightImages = np.hstack((image_r, imageCroppedAndPoseR, imagePoseR))
+                else:
+                    paddingA = math.floor(differenceSize / 2)
+                    paddingB = math.ceil(differenceSize/2) 
+                    imageCroppedAndPoseL = cf.pad_image(imageCroppedAndPoseL, imageCroppedAndPoseL.shape[0], imageCroppedAndPoseL.shape[1] + paddingA)
+                    imagePoseL = cf.pad_image(imagePoseL, imagePoseL.shape[0], imagePoseL.shape[1] + paddingB)
+                    leftImages = np.hstack((image_l, imageCroppedAndPoseL, imagePoseL))
 
-        if (warmup and warmupCounter < warmupAmount):
-            warmupCounter = warmupCounter + 1
-            continue
-        """
+            bothImages = np.vstack((leftImages, rightImages))
 
+            print("Managed to go through all the way of the script")
 
-        points_3d[2, :] *= -1 #To left handed unity coordinates by flipping z ax
-        circle1 = points_3d[:, 4]  
-        circle8 = points_3d[:, 11]
-        circle57 = points_3d[:, 60]
-        circle64 = points_3d[:, 67]
-
-        EEGpositions = []
-        for i in range(68):
-            data_x = points_3d[:, i][0]  # Data1x to Data67x
-            data_y = points_3d[:, i][1]  # Data1x to Data67x
-            data_z = points_3d[:, i][2]  # Data1x to Data67x
-
-            EEGpositions.extend([data_x, data_y, data_z])
-
-        index = index + 1
-        timestamp = cf.get_timestamp()
-        """
-        allData = [index, timestamp] + list(DinoPosAndRot) + EEGpositions
-        data_batch.append(allData)
-
-
-        # Check if batch is full, then save it to CSV
-        if len(data_batch) >= batch_size:
-            print(f"Saving batch of {batch_size} rows to CSV...")
-            cf.save_batch_to_csv(full_path, np.array(data_batch))
-            data_batch = []  # Clear the batch after saving
-        """
-        
-        cropLFilename = os.path.join(folderName, f"cropL_{index}.png")
-        cropRFilename = os.path.join(folderName, f"cropR_{index}.png")
-        superLFilename = os.path.join(folderName, f"superL_{index}.png")
-        superRFilename = os.path.join(folderName, f"superR_{index}.png")
-        keypointLFilename = os.path.join(folderName, f"keypointL_{index}.npy")
-        keypointRFilename = os.path.join(folderName, f"keypointR_{index}.npy")
-        #cv2.imwrite(cropLFilename, imageCroppedL)
-        #cv2.imwrite(cropRFilename, imageCroppedR)
-        #cv2.imwrite(superLFilename, imageSuperL)
-        #cv2.imwrite(superRFilename, imageSuperR)
-        #np.save(keypointLFilename, keypointsL)
-        #np.save(keypointRFilename, keypointsR)
-        
-        # Apply dynamic Kalman filter adjustment
-        for i in range(points_3d.shape[1]):
-            filtered_position = KalmanFilter.dynamic_adjustment(kalman_filters[i], previous_positions[i], points_3d[:, i])
-            previous_positions[i] = filtered_position  # Update previous position
-
-        # Apply Kalman filter to smooth the 3D points
-        filtered_circle1 = previous_positions[4]
-        filtered_circle8 = previous_positions[11]
-        filtered_circle57 = previous_positions[60]
-        filtered_circle64 = previous_positions[67]
-
-        #for plotting
-        image_l = cf.resize_image(image_l, target_size=320)
-        imageCroppedL = cf.resize_image(imageCroppedL, target_size=320)
-        imageSuperL = cf.resize_image(imageSuperL, target_size=320)
-        imagePoseL = cf.resize_image(imagePoseL, target_size=320)
-        imagePoseL = cf.ShowPoseOnImage(imagePoseL, keypointsL)
-        imageCroppedAndPoseL = cf.ShowPoseOnImage(imageCroppedL, keypointsL)
-        leftImages = np.hstack((image_l, imageCroppedAndPoseL, imagePoseL))
-
-        image_r = cf.resize_image(image_r, target_size=320)
-        imageCroppedR = cf.resize_image(imageCroppedR, target_size=320)
-        imageSuperR = cf.resize_image(imageSuperR, target_size=320)
-        imagePoseR = cf.resize_image(imagePoseR, target_size=320)
-        imagePoseR = cf.ShowPoseOnImage(imagePoseR, keypointsR)
-        imageCroppedAndPoseR = cf.ShowPoseOnImage(imageCroppedR, keypointsR)
-        rightImages = np.hstack((image_r, imageCroppedAndPoseR, imagePoseR))
-
-        differenceSize = abs(leftImages.shape[1] - rightImages.shape[1])
-
-        if(cf.is_divisible_by_2(differenceSize)):
-            if(leftImages.shape[1] > rightImages.shape[1]):
-                padding = int(differenceSize / 2)
-                imageCroppedAndPoseR = cf.pad_image(imageCroppedAndPoseR, imageCroppedAndPoseR.shape[0], imageCroppedAndPoseR.shape[1] + padding)
-                imagePoseR = cf.pad_image(imagePoseR, imagePoseR.shape[0], imagePoseR.shape[1] + padding)
-                rightImages = np.hstack((image_r, imageCroppedAndPoseR, imagePoseR))
-            else:
-                padding = int(differenceSize / 2)
-                imageCroppedAndPoseL = cf.pad_image(imageCroppedAndPoseL, imageCroppedAndPoseL.shape[0], imageCroppedAndPoseL.shape[1] + padding)
-                imagePoseL = cf.pad_image(imagePoseL, imagePoseL.shape[0], imagePoseL.shape[1] + padding)   
-                leftImages = np.hstack((image_l, imageCroppedAndPoseL, imagePoseL))
-
-        else:
-            if(leftImages.shape[1] > rightImages.shape[1]):
-                paddingA = math.floor(differenceSize / 2)
-                paddingB = math.ceil(differenceSize/2) 
-                imageCroppedAndPoseR = cf.pad_image(imageCroppedAndPoseR, imageCroppedAndPoseR.shape[0], imageCroppedAndPoseR.shape[1] + paddingA)
-                imagePoseR = cf.pad_image(imagePoseR, imagePoseR.shape[0], imagePoseR.shape[1] + paddingB)
-                rightImages = np.hstack((image_r, imageCroppedAndPoseR, imagePoseR))
-            else:
-                paddingA = math.floor(differenceSize / 2)
-                paddingB = math.ceil(differenceSize/2) 
-                imageCroppedAndPoseL = cf.pad_image(imageCroppedAndPoseL, imageCroppedAndPoseL.shape[0], imageCroppedAndPoseL.shape[1] + paddingA)
-                imagePoseL = cf.pad_image(imagePoseL, imagePoseL.shape[0], imagePoseL.shape[1] + paddingB)
-                leftImages = np.hstack((image_l, imageCroppedAndPoseL, imagePoseL))
-
-        bothImages = np.vstack((leftImages, rightImages))
-
-        cv2.imshow('allImages', bothImages)
-        cv2.waitKey(1)
+            #cv2.imshow('allImages', bothImages)
+            #cv2.waitKey(1)
+            output_dir = "PipeLineTestResults"
+            filename = os.path.join(output_dir, f"frame_{index:04d}.png")
+            cv2.imwrite(filename, bothImages)
+    except KeyboardInterrupt:
+        pass
 
 
     # Stop streams ------------------------------------------------------------
@@ -401,5 +408,5 @@ if (__name__ == '__main__'):
     ipc.close()
 
     #stop keyboard events
-    listener.join()
+    #listener.join()
   
