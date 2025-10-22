@@ -55,10 +55,25 @@ buffer_size = 10
 # Models
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
 
+# Limit thread usage for HPC environment
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+
+
+
 modelBounding = YOLO("models/bestCropping_New_Small.pt", task='detect')
-modelSuper = ort.InferenceSession("models/Super_90kImages_800000.onnx")
-modelNameSuper = modelSuper.get_inputs()[0].name
+
 modelPose = YOLO("models/Keypose_90kImages_run16_best.pt")
+
+# Configure ONNX Runtime session
+sess_options = ort.SessionOptions()
+sess_options.intra_op_num_threads = 1
+sess_options.inter_op_num_threads = 1
+# Do not set CPU affinity; let ORT manage it
+modelSuper = ort.InferenceSession("models/Super_90kImages_800000.onnx", sess_options=sess_options)
+modelNameSuper = modelSuper.get_inputs()[0].name
+
 
 #Saving functions
 ParentFolder = "Measurements/DINO/"
